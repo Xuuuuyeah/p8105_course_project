@@ -1,0 +1,91 @@
+---
+title: "P8105_hw1_yx2954"
+output: github_document
+---
+
+```{r, echo = FALSE, message = FALSE}
+library(tidyverse)
+```
+
+# Problem 1
+
+## Part 1
+```{r}
+data("penguins", package = "palmerpenguins")
+```
+**Description**: 
+
+*   1. Important variables
+    * The species of penguins includes: `r paste(unique(pull(penguins,species)), collapse = ", ")`
+    * The islands of oringin includes: `r paste(unique(pull(penguins, island)), collapse = ", ")`
+    * The range of their bill length in mm are [`r  range(pull(penguins, bill_length_mm), na.rm = TRUE)`]
+    * The range of their bill depth in mm are [`r  range(pull(penguins, bill_depth_mm), na.rm = TRUE)`]
+    * The range of their flipper length in mm are [`r  range(pull(penguins, flipper_length_mm), na.rm = TRUE)`]
+    * The range of their body mass in g are [`r  range(pull(penguins,body_mass_g), na.rm = TRUE)`]
+    * All data are from year of `r paste(unique(pull(penguins, year)), collapse = ", ")`
+
+*   2. Size of dataset
+    * This dataset includes `r nrow(penguins)` rows, and `r ncol(penguins)` columns
+    
+*   3. Mean flipper length
+    * The mean flipper length is `r mean(pull(penguins, flipper_length_mm), na.rm = TRUE)`
+    
+## Part 2
+```{r}
+
+scatterplot = ggplot(penguins, aes(x = bill_length_mm, y = flipper_length_mm, color = species)) +
+  geom_point(na.rm = TRUE) +
+  labs(
+    title = "Scatterplot of Flipper Length vs Bill Length",
+    x = "Bill Length (mm)",
+    y = "Flipper Length (mm)"
+  ) +
+  theme_classic()
+
+ggsave(filename = "scatterplot_flipper_vs_bill.png", plot = scatterplot, width = 10, height = 10, dpi = 300)
+
+print(scatterplot)
+```
+
+# Problem 2
+
+Start with generate random vectors and combine them into a data frame
+```{r}
+
+set.seed(123)
+
+# Set random vectors
+random_sample = rnorm(10)
+logical_vector = random_sample > 0
+char_vector = sample(c("我", "爱", "你", "中", "国"), size = 10, replace = TRUE)
+factor_vector = factor(sample(c("Level1", "Level2", "Level3"), size = 10, replace = TRUE))
+
+# Create a data frame with vectors
+df = data.frame(
+  random_sample = random_sample,
+  logical_vector = logical_vector,
+  char_vector = char_vector,
+  factor_vector = factor_vector
+)
+
+df
+```
+
+Then get the mean of these random vectors with 'pull()' function.
+```{r}
+mean(pull(df, random_sample))
+mean(pull(df, logical_vector))
+mean(pull(df, char_vector))
+mean(pull(df, factor_vector))
+```
+
+Of 4 random vectors, we can get the mean of random_sample and logical_vector, we cannot get the mean of character_vector and factor_vector. 
+Should convert them into a different type. 
+
+```{r}
+logical_vector  = as.numeric(pull(df, logical_vector))
+char_vector = as.numeric(pull(df, char_vector))
+factor_vector = as.numeric(pull(df, factor_vector))
+```
+
+The 'True' and 'False' value in logical_vector is automatically converted to 1 and 0 when calculating the mean, allowing the calculation; the value in char_vector are still returning N/A, indicating that char_vector cannot be converted into numerber; the value in factor_vector are converted to numeric value, allowing the calculation of mean.
