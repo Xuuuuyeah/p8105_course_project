@@ -1,0 +1,525 @@
+---
+title: "p8105_hw3_yx2954"
+author: "Yiran Xu"
+date: "2024-10-10"
+output: github_document
+---
+
+```{r include=FALSE}
+library(p8105.datasets)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(ggridges)
+library(readr)
+library(tidyverse)
+```
+
+# Problem 1
+
+## First, let’s take a few minutes to understand the dataset and the variables it contains.
+
+```{r}
+data("ny_noaa")
+str(ny_noaa)
+nrow(ny_noaa)
+ncol(ny_noaa)
+
+n_station = 
+  ny_noaa |>
+  pull(id) |>
+  n_distinct()
+
+date_range = ny_noaa |>
+  pull(date) |>
+  range(na.rm = TRUE)
+```
+
+## Next, check the range of key variables
+
+### Prcp
+
+```{r}
+max_prcp_info = ny_noaa |>
+  filter(prcp == max(prcp, na.rm = TRUE)) |>
+  select(id, date, prcp)
+
+min_prcp_info = ny_noaa |>
+  filter(prcp == min(prcp, na.rm = TRUE)) |>
+  select(id, date, prcp)
+```
+
+### Snow & snwd
+
+```{r}
+max_snow_info = ny_noaa |>
+  filter(snow == max(snow, na.rm = TRUE)) |>
+  select(id, date, snow)
+
+min_snow_info = ny_noaa |>
+  filter(snow == min(snow, na.rm = TRUE)) |>
+  select(id, date, snow)
+
+max_snwd_info = ny_noaa |>
+  filter(snwd == max(snwd, na.rm = TRUE)) |>
+  select(id, date, snwd)
+
+min_snwd_info = ny_noaa |>
+  filter(snwd == min(snwd, na.rm = TRUE)) |>
+  select(id, date, snwd)
+```
+
+### Tmax & tmin
+
+```{r}
+max_tmax_info = ny_noaa |>
+  mutate(tmax = as.numeric(tmax)) |>
+  filter(tmax == max(tmax, na.rm = TRUE)) |>
+  select(id, date, tmax, tmin)
+
+min_tmax_info = ny_noaa |>
+  mutate(tmax = as.numeric(tmax)) |>
+  filter(tmax == min(tmax, na.rm = TRUE)) |>
+  select(id, date, tmax, tmin)
+
+max_tmin_info = ny_noaa |>
+  mutate(tmin = as.numeric(tmin)) |>
+  filter(tmin == max(tmin, na.rm = TRUE)) |>
+  select(id, date, tmin)
+
+min_tmin_info = ny_noaa |>
+  mutate(tmin = as.numeric(tmin)) |>
+  filter(tmin == min(tmin, na.rm = TRUE)) |>
+  select(id, date, tmin)
+```
+
+## Then, count missing info
+
+```{r}
+na_snow = ny_noaa |>
+  filter(is.na(snow)) |>
+  count() 
+
+na_snwd = ny_noaa |>
+  filter(is.na(snwd)) |>
+  count()
+
+na_tmax = ny_noaa |>
+  filter(is.na(tmax)) |>
+  count()
+
+na_tmin = ny_noaa |>
+  filter(is.na(tmin)) |>
+  count()
+```
+
+## Description
+
+*   The table size is **`r nrow(ny_noaa)`** by **`r ncol(ny_noaa)`**. Variables includes **id** (the identifier for specific weather station), **date**, **prcp(precipitation)**, **snow(snowfall)**, **snwd(snow depth in millimeters)**, **maximum and minimun temperature**. 
+*   This table contains data from **`r n_station`** distinct stations in total from **`r date_range[1]`** to **`r date_range[2]`**.
+*   The maximum precipitation was **`r max_prcp_info[3]`** observed on **`r max_prcp_info[2]`** at **`r max_prcp_info[1]`**. The minimum is **0**, as expected. There were **`r nrow(min_prcp_info)`** days without raning.
+*   The maximum snowfall was **`r max_snow_info[3]`** on **`r max_snow_info[2]`** at **`r max_snow_info[1]`**, while the minimum was **`r min_snow_info[3]`** on **`r min_snow_info[2]`** at **`r min_snow_info[1]`**. An recording error may occur on that day as the snowfall cannot be negative.
+*   The maximum snow depth was **`r max_snwd_info[3]`** observed on **`r max_snwd_info[2]`** at **`r max_snwd_info[1]`**. The minimum is **0** as expected. There were **`r nrow(min_snwd_info)`** days without snow accumulation.
+*   The maximum tmax was **`r max_tmax_info[1,3]`** observed on **`r nrow(max_tmax_info)`** different days. The minimum was **`r min_tmax_info[3]`** observed on **`r min_tmax_info[2]`** at **`r min_tmax_info[1]`**.
+*   The maximum tmin was **`r max_tmin_info[1,3]`** on **`r nrow(max_tmin_info)`** different days. The minimum was **`r min_tmin_info[3]`** on **`r min_tmin_info[2]`** at **`r min_tmin_info[1]`**
+*   There is a high degree of missing information in the table. For snow and snwd, about **`r round(na_snow/nrow(ny_noaa)*100, 2)`%** and **`r round(na_snwd/nrow(ny_noaa)*100, 2)`%** are missing information, respectively. **`r round(na_tmax/nrow(ny_noaa)*100, 2)`%** and **`r round(na_tmin/nrow(ny_noaa)*100, 2)`%** of max and min temperature are missing.
+
+## Data cleaning
+*   Clean name;
+*   Convert tmax and tmin to numeric data;
+*   Keep temperature, precipitation, snowfall in reasonable units 
+*   Create seperate columns for year, month and day
+*   Remove error, i.e. tmax <= tmin; snow < 0;
+*   Remove empty row
+
+```{r}
+ny_noaa_clean = ny_noaa |>
+  janitor::clean_names() |>
+  mutate(tmax = as.numeric(tmax) / 10, 
+         tmin = as.numeric(tmin) / 10,
+         prcp = prcp / 10,
+         year = year(date),
+         month = month(date),
+         day = day(date)) |> 
+  select(year, month, day, everything(), -date) |>
+  filter(tmax > tmin | is.na(tmax) | is.na(tmin)) |>
+  filter(snow >= 0 | is.na(snow)) |>
+  filter(!(is.na(snow) & is.na(snwd) & is.na(tmax) & is.na(tmin) & is.na(prcp))) |>
+  rename(
+    tmax_c = tmax,     
+    tmin_c = tmin,     
+    prcp_mm = prcp,   
+    snow_mm = snow,    
+    snwd_mm = snwd     
+  )
+```
+
+## Count most common snowfall
+
+```{r}
+ny_noaa_clean |> 
+  count(snow_mm) |>
+  arrange(desc(n)) 
+```
+
+For snowfall, the most commonly observed values is 0mm among with 2007240	observations, as there is no snow in most of the days.
+
+## Make two-panel plot
+
+### Filter and group data
+
+```{r}
+avg_tmax_df = 
+  ny_noaa_clean |>
+  filter(month %in% c(1, 7) & !is.na(tmax_c)) |>
+  group_by(id, month) |>
+  summarise(avg_tmax = mean(tmax_c))
+```
+
+### Make plot
+
+```{r avg_tmax_plot, fig.path='data/plots/', fig.ext='png'}
+avg_tmax_p = ggplot(avg_tmax_df, aes(y = avg_tmax, fill = factor(month, labels = c("January", "July")))) +
+  geom_boxplot() +  
+  facet_grid(.~ month, labeller = labeller(month = c(`1` = "January", `7` = "July"))) +
+  labs(title = "Average Max Temperature in January and July by Station",
+       x = "Station",
+       y = "Average Max Temperature (°C)",
+       fill = "Month") +
+  theme(axis.text.x = element_blank()) 
+
+avg_tmax_p
+```
+
+It can be noticed that the average max temperature in January is greatly lower than that in July. Outliers in both panel can be detected. The average temperature in some station significantly higher or lower than the mean.
+
+## Make other plots
+
+### Geom_hex
+```{r tmin_max_p, fig.path='data/plots/', fig.ext='png'}
+tmin_max_p = ggplot(ny_noaa_clean, aes(x = tmin_c, y = tmax_c)) + 
+  geom_hex() + 
+  labs(x = "t_min (°C)",
+       y = "t_max (°C)",
+       title = "tmax vs tmin")
+
+tmin_max_p
+```
+
+### Ridge plot
+```{r snow_year_p, fig.path='data/plots/', fig.ext='png'}
+ridge_p = ny_noaa_clean |>
+  filter(snow_mm > 0 & snow_mm< 100) |>
+  ggplot(aes(x = snow_mm, y = as.factor(year))) + 
+  geom_density_ridges() +
+  labs(
+    x = "Snowfall (mm)",
+    y = "Year",
+    title = "Distribution of Snowfall Values Greater Than 0 and Less Than 100 by Year"
+  ) +
+  scale_y_discrete(expand = expansion(add = c(1, 2)))
+
+ridge_p
+```
+
+# Problem 2
+
+## Load data
+```{r}
+demo_df = read_csv("data/nhanes_covar.csv", na = c("NA", ".", ""), skip = 4) |>
+  janitor::clean_names() 
+  
+acc_df = read_csv("data/nhanes_accel.csv", na = c("NA", ".", "")) |>
+  janitor::clean_names() 
+
+```
+
+## Merge df
+
+```{r}
+anti_join(demo_df, acc_df, by = "seqn")
+
+merged_df = left_join(demo_df, acc_df, by = "seqn")
+```
+
+## Tidy & orgnize df
+```{r}
+final_df = 
+  merged_df |> 
+  pivot_longer(cols = starts_with("min"),
+               names_to = "minute",
+               values_to = "acc") |>
+  filter(age >= 21) |>
+  drop_na(sex, age, bmi, education) |>
+  mutate(
+    sex = recode(sex, "1" = "Male", "2" = "Female"),
+    education = recode(education, "1" = "Less than High School", "2" = "High School Equivalent", "3" = "More than High School"),
+    sex = as_factor(sex), 
+    education = fct_relevel(education, "Less than High School", "High School Equivalent", "More than High School"))
+
+```
+
+## Reader-friendly table for the number of men and women in each education category
+
+```{r}
+sex_edu = final_df |>
+  group_by(sex, education) |>
+  count() |>
+  pivot_wider(
+    names_from = "education",
+    values_from = "n"
+  )
+
+sex_edu
+```
+
+## Visualization - age distribution
+
+```{r age_dist_p, fig.path='data/plots/', fig.ext='png'}
+age_dist_p = final_df |>
+  ggplot(aes(x = sex, y = age)) + 
+  geom_violin(aes(fill = sex), alpha = .5) + 
+  stat_summary(fun = "median", color = "blue") +
+  facet_grid(. ~ education) +
+  labs(
+    title = "Age distributions for men and women in each education category"
+  )
+
+age_dist_p
+```
+
+## Comments:
+*   Within male group, the number of people with more than high school education background is more than those with high school equivalent, while the number of those with less than high school education background is the least. The numbers are **`r sex_edu[3, 3]`**, **`r sex_edu[2, 3]`**, and **`r sex_edu[1, 3]`**, respectively.
+*   Within the female group, the number of those with high school equivalent education background is the least, followed by those with less than high school, and more than high school education background. The numbers are  **`r sex_edu[5, 3]`**, **`r sex_edu[4, 3]`**, and **`r sex_edu[6, 3]`**, respectively.
+*   Comparing the male group and the female group, there are more males with high school equivalent background; however, there are more females with less than high school and more than high school background.
+*   The age distribution across different education background is shown in the picture. In Less than High School group, more males are concentrated on the age of 45 and 70-80, while above 70 are the most common age for female. The median age in female group is slightly higher than the median in male group.
+*   In High School Equivalent group, more males are concentrated on the age of 20-35 and 50-70, while 60-80 are the most common age for female. The median age in female group is higher than the median in male group.
+*   In More than High School group, the age distribution is relatively even, while 25-35 are the most common age for female, which is greatly different to the previous two groups. The median age in female group is slightly lower than the median in male group.
+
+## Total activity vs age
+
+### Get total activity
+```{r}
+sum_acc = 
+  final_df |>
+  group_by(seqn) |>
+  summarize(total_acc = sum(acc, na.rm = TRUE)) |>
+  left_join(final_df %>% distinct(seqn, age, sex, education), by = 'seqn')
+```
+
+### Make plot
+```{r acc_age, fig.path='data/plots/', fig.ext='png'}
+acc_age = ggplot(sum_acc, aes(x = age, y = total_acc, color = sex)) +
+  geom_point() +
+  geom_smooth(se = FALSE) +
+  facet_grid(. ~ education) +
+  labs(title = "Total Activity vs Age by Gender and Education Level", x = "Age", y = "Total Activity") +
+  theme_minimal()
+
+acc_age
+```
+
+### Comments
+
+*   Although the points have a scattered distribution, it can be noticed that total activity decreases as age increases in general in all three groups. 
+*   **Within Group**: Female with less than a high school background were more active overall than men, the opposite of the other two groups. 
+*   **Across group**: Compared across groups, both male and female aged 20 - 40 in more than high school group are less active than their peers in other groups, presumably because a higher proportion of these people working on office.
+*   Outliers can be detected in both High School Equivalent group and Higher than High School, with either apparently higher or lower total activity compare to others within the groups.
+
+## acc VS mins
+
+### Get acc distribution among t
+```{r}
+acc_t_df = 
+  final_df |>
+  group_by(minute, sex, education) |>
+  summarize(avg_acc_t = mean(acc, na.rm = TRUE)) |>
+  mutate(minute = as.numeric(gsub("min", "", minute)))
+```
+
+### Make plot
+```{r acc_min, fig.path='data/plots/', fig.ext='png'}
+acc_min = ggplot(acc_t_df, aes(x = minute, y = avg_acc_t, color = sex, education)) +
+  geom_point(alpha = .2) +
+  geom_smooth(aes(color = sex), se = FALSE) +
+  facet_grid(education ~ .) +
+  labs(title = "Average Activity vs Time by Gender and Education Level", x = "Minutes", y = "Average Activity") +
+  theme(
+    strip.text = element_text(size = 7)   
+  )
+
+acc_min
+```
+
+### Comments
+*   **General:** Across all education levels, participants exhibit a similar pattern of activity throughout the day. The activity level gradually increases in the morning, peaks in the middle of the day, and then declines during the evening. This trend suggests that population follow a normal daily rhythm, and mostly go to bed at minute 0.
+*   **Female VS Male:** In all education levels, there is a slight difference between the activity patterns of males and females. In general, male is less active than female during daytime, and tend to stay up late in the evening. According to the smooth trend, female has a higher peak value than male during daytime.
+*   **Education level:** There is barely an impact from education level, but it appears that people with less than high school background tend to have a slightly higher peak during daytime.
+
+# Problem 3
+
+## Import data, Clean, tidy data and describe data
+
+### Import data
+```{r}
+Jan_20 = 
+  read_csv("data/citibike/Jan 2020 Citi.csv.zip") |>
+  mutate(date = as.Date("2020-01-01"))
+
+Jan_24 = 
+  read_csv("data/citibike/Jan 2024 Citi.csv.zip") |>
+    mutate(date = as.Date("2024-01-01"))
+
+July_20 = read_csv("data/citibike/July 2020 Citi.csv.zip") |>
+      mutate(date = as.Date("2020-07-01"))
+
+July_24 = read_csv("data/citibike/July 2024 Citi.csv.zip") |>
+      mutate(date = as.Date("2024-07-01"))
+```
+
+### Clean, and tidy data
+
+```{r}
+rides_df = 
+  bind_rows(Jan_20, Jan_24, July_20, July_24) |>
+  distinct() |>
+  janitor::clean_names() |>
+  pivot_longer(
+    start_station_name: end_station_name,
+    names_to = "station_status", values_to = "station_name",
+    names_pattern = "(start|end)_station_name") 
+```
+
+### Description
+
+```{r}
+ride_types =
+  rides_df |>
+  pull(rideable_type) |>
+  unique()
+```
+
+```{r}
+most_day =
+  rides_df |>
+  count(weekdays) |>
+  arrange(desc(n))
+```
+
+```{r}
+avg_time =
+  rides_df |>
+  pull(duration) |>
+  mean(na.rm = TRUE)
+```
+
+```{r}
+num_member = 
+  rides_df |>
+  count(member_casual)
+```
+
+*   The combine dataset contains **`r nrow(rides_df)`** order information, including order id, bike types, order data, order duration, member status, start and end location.
+*   Types of bikes includes: **`r ride_types[1]`** and **`r ride_types[2]`**
+*   On **`r most_day[1, 1]`**, citibike get the most orders **(`r most_day[1, 2]`)**.
+*   The average duration for a single order is **`r avg_time`**.
+*   For all order, **`r num_member[2, 2]/nrow(rides_df) * 100`%** are from members.
+
+## Total number of rides in each combination of year and month
+
+```{r}
+num_rides_df = 
+  rides_df |>
+  group_by(date, member_casual) |> 
+  distinct(ride_id) |>
+  count() |>
+  pivot_wider(
+    names_from = member_casual, values_from = n) 
+
+```
+### Comments
+
+*   on January 2020, most of riders are members, the proportion reached **`r num_rides_df[1,3]/(num_rides_df[1,3] + num_rides_df[1,2])`**. There was a outbreak in casual rider number from 2020-01 to 2020-07, while the number of members slightly but continiously growing. From 2020-07 to 2024-01, the proportion of member increased, presumably casual customer were becoming members, though the total number of order decreases. From 2024-01 to 2024-07, there was another outbreak in both casual rider and member rider. The number of member consistently growed from 2020-01 to 2024-07.
+
+## 5 popular start station for July 2024
+
+```{r}
+most_start = rides_df |>
+  filter(station_status == "start") |>
+  group_by(date, station_name) |>
+  count() |>
+  arrange(desc(n))
+```
+
+The 5 most popular starting stations for July 2024 are: `r most_start[1, 2]`: `r most_start[1, 3]` rides; `r most_start[2, 2]`: `r most_start[2, 3]` rides; `r most_start[3, 2]`: `r most_start[3, 3]` rides; `r most_start[4, 2]`: `r most_start[4, 3]` rides; `r most_start[5, 2]`: `r most_start[5, 3]` rides. 
+
+## Median duration
+
+### Make median_df
+
+```{r}
+med_dur_df = 
+  rides_df |>
+  mutate(
+    year = year(date),
+    month = as.character(month(date)),
+    day = fct_relevel(weekdays, "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")) |>
+  group_by(year, month, day) |>
+  summarize(med_dur = median(duration, na.rm = TRUE))
+```
+
+### Make plot
+
+```{r date_med, fig.path='data/plots/', fig.ext='png'}
+date_med_p = ggplot(med_dur_df, aes(x = day, y = med_dur, fill = month)) +
+  geom_bar(stat = 'identity', position = position_dodge()) +
+  facet_grid(. ~ year) +
+  labs(title = 'Effects of Day of the Week, Month, and Year on Median Ride Duration',
+       x = 'Day of the Week',
+       y = 'Median Ride Duration (minutes)',
+       fill = 'Month') +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+date_med_p
+```
+
+### Comments
+
+*   **Days of week**: The median of duration is higher in weekend than in weekdays. This is true for 2020-01, 2020-07, and 2024-07, while the trend is not as apparent in 2024-01, where the median of duration is only slightly higher on Saturday. This suggests that people have more free time on weekends than weekdays.
+*   **Month**: The median of duration on January is is smaller than July in 2020, while the difference became slower in 2024. This could imply that people are less likely to ride a bike in cold winter.
+*   **Year**: The median of duration in July, 2024 is approximately the same as that in July, 2020, while there is a huge difference in median on July in different years. This implies that there could be an alternative way of transportation during summer.
+
+## duration distribution
+
+### Make dist_df
+
+```{r}
+dist_df = 
+  rides_df |>
+  mutate(
+    month = factor(format(date, '%m'), levels = c('01', '07'), labels = c('January', 'July')), 
+    year = year(date)) |>
+  filter(year == "2024")
+```
+
+### Make plot
+
+```{r dur_dist_p, fig.path='data/plots/', fig.ext='png'}
+dur_dist_p = ggplot(dist_df, aes(x = month, y = duration, fill = member_casual)) +
+  geom_boxplot() +
+  facet_grid(. ~ rideable_type, scales = 'free') +
+  labs(title = 'Impact of Month, Membership Status, and Bike Type on Ride Duration in 2024',
+       x = 'Month',
+       y = 'Ride Duration (minutes)',
+       fill = 'Membership Status') +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+dur_dist_p
+```
+
+### Discussion
+*   **General**: Plenty of outliers are detected near all boxes, suggesting a variability in duration. It worth noting that the electric bike group is more likely to have outlier in very long duration. This may be the case as electric bike is less energy-demanding.
+*   **Impact of month**: For both bike types and membership, status, the ride duration tends to be slightly higher in July compared to January.
+*   **Membership status**: Members generally have shorter and more consistent ride duration, as indicated by the thinner box that is lower in member group than in casual group. Casual users display a wider range of ride duration, suggesting more variability in usage patterns.
+*   **Bike type**: The duration is slightly higher in classic bike group than in electric bike. Besides, the duration is slightly more consistent in electric bike group. These suggest electric might be faster than classic bike and therefore cut down the time on road. 
